@@ -1,65 +1,78 @@
-import { Controller, Post, Req, Body } from '@nestjs/common';
+import { Controller, Get, Post, Req, Res} from '@nestjs/common';
 import { UsersService } from './users.service';
 import { CreateUserDto } from './dto/create-user.dto';
 import { Request } from 'express';
+import { User } from './schemas/user.schema';
 import * as bcrypt from 'bcrypt';
-@Controller()
+import { createRequire } from 'module';
+@Controller('users')
 export class UsersController {
   constructor(private readonly usersService: UsersService) {}
 
-  @Post()
-  async signup(@Req() request: Request):string{
-      const username: string = request.username;
-      const email: string = request.email;
-      let password: string = request.password;
-      const confirmPassword: string = request.confirmPassword;
+  @Post('signup')
+  async signup(@Req() request: Request):Promise<string>{
+      const username: string = request.query.username.toString();
+      const email: string = request.query.email.toString();
+      let password: string = request.query.password.toString();
+      const confirmPassword: string = request.query.confirmPassword.toString();
       if(password != confirmPassword){
           return 'Passwords do not match';
       }else{
-        saltOrRounds = 10;
-        password = await bcrypt.hash(password, saltOrRounds);
-        let createUserDto: createUserDto = new CreateUserDto;        
-        let sessionid: string = this.usersService.generateSessionId();
-        createUserDto.setAll(id,username,email,password,sessionid);
-        await this.usersService.create(createUserDto);
+        let saltOrRounds = 10;
+        password = await bcrypt.hash(password, saltOrRounds, async (error, hashed_password) => {
+            let createUserDto: CreateUserDto = new CreateUserDto;        
+            let sessionid: string = this.usersService.generateSessionId();
+            createUserDto.username = username;
+            createUserDto.password = hashed_password;
+            createUserDto.email = email;
+            createUserDto.sessionid = sessionid;
+            await this.usersService.create(createUserDto);
+        });
+        
         return 'User Created';
       }
   }
-  @Post()
-  async login(@Req() request:Request):string{
-      const usernameOrEmail: string = request.usernameOrEmail;
-      const password: string = request.password;
+  @Post('login')
+  async login(@Req() request:Request, @Res() res): Promise<string>{
+      const usernameOrEmail: string = request.query.usernameOrEmail.toString();
+      const password: string = request.query.password.toString();
       let createUserDto = await this.usersService.findByEmailOrUsername(usernameOrEmail);
       if(createUserDto == null || createUserDto == undefined){
           return "Username or Email is not available";
       }
-      const isMatch = await bcrypt.compare(password,createUserDto.password);  
-      if(isMatch){
-          return "User Logged in";
-      }else{
-          return "Password is incorrect";
-      }
+      let hashed_password = createUserDto.password;
+      return this.usersService.checkPassword(password,hashed_password, createUserDto);
+        
   }
-  @Post()
+  @Post('forgotPassword')
   forgotPassword(@Req() request:Request):string{
-      const email: string = request.email;
+      const email: string = request.params.email;
+      return 'forgot password not implemented';
   }
-  @Post()
+  @Post('changePassword')
   changePassword(@Req() request:Request):string{
-      const password: string = request.password;
-      const id: string = request.id;
-      const confirmPassword: string = request.confirmPassword;
+      const password: string = request.params.password;
+      const sessionid: string = request.params.sessionid;
+      const confirmPassword: string = request.params.confirmPassword;
       if(password != confirmPassword){
           return "Passwords do not match";
+      }else{
+          return "changePassword not implemented";
       }
   }
-  @Post()
+  @Post('updatePassword')
   updatePassword(@Req() request:Request):string{
-      const id: string = request.id;
-      const password: string = request.password;
-      const confirmPassword: string = request.confirmPassword;
+      const id: string = request.params.id;
+      const password: string = request.params.password;
+      const confirmPassword: string = request.params.confirmPassword;
       if(password != confirmPassword){
           return "Passwords do not match";
+      }else{
+          return "update Password not implemented";
       }
+  }
+  @Get('findAll')
+  async findAll(): Promise<string>{
+      return await (await this.usersService.findall()).toString();
   }
 }
